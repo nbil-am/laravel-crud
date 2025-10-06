@@ -13,3 +13,4 @@ Route::post('/user/signup',[UserController::class,'register']);
 Route::post('/user/signin',[UserController::class,'login']);
 Route::post('/user/signout',[UserController::class,'logout'])->middleware('auth:sanctum');
 Route::get('/isLogin',[UserController::class,'isLogin'])->middleware('auth:sanctum');
+Route::get('/refresh_token',[UserController::class,'refreshToken']);

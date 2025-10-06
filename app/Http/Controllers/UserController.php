@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class UserController extends Controller
 {
@@ -78,29 +79,45 @@ class UserController extends Controller
             ->cookie('front_token', '', -1, '/');
     }
 
-    public function refreshToken(Request $request)
-    {
-        $refreshToken = $request->cookie('refresh_token');
 
-        if (!$refreshToken) {
-            return response()->json(['message' => 'No refresh token provided'], 401);
-        }
+public function refreshToken(Request $request)
+{
+    $refreshToken = $request->cookie('refresh_token');
 
-        // Validasi refresh token (manual parsing)
-        $user = $request->user(); // Bisa pakai sanctum middleware khusus refresh route
-
-        if (!$user) {
-            return response()->json(['message' => 'Invalid refresh token'], 401);
-        }
-
-        // Buat token baru untuk front-end
-        $newFrontToken = $user->createToken('front_token',[ '*'],now()->addMinutes(20))->plainTextToken;
-
-
-        return response()->json([
-            'message' => 'Token refreshed successfully',
-        ])->cookie('front_token', $newFrontToken, 20, '/', null, false, false);
+    if (!$refreshToken) {
+        return response()->json(['message' => 'No refresh token provided'], 401);
     }
+
+    // Pisahkan ID dan token dari format "id|token"
+    $parts = explode('|', $refreshToken, 2);
+    if (count($parts) !== 2) {
+        return response()->json(['message' => 'Invalid token format'], 400);
+    }
+
+    [$id, $token] = $parts;
+
+    // Cari token di database
+    $tokenModel = PersonalAccessToken::find($id);
+
+    if (!$tokenModel || !hash_equals($tokenModel->token, hash('sha256', $token))) {
+        return response()->json(['message' => 'Invalid or expired refresh token'], 401);
+    }
+
+    // Ambil user terkait token tersebut
+    $user = $tokenModel->tokenable;
+
+    if (!$user) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    // Buat front_token baru (misal expired 20 menit)
+    $newFrontToken = $user->createToken('front_token', ['*'], now()->addMinutes(20))->plainTextToken;
+
+    return response()->json([
+        'message' => 'Token refreshed successfully',
+    ])->cookie('front_token', $newFrontToken, 20, '/', null, false, false);
+}
+
     public function isLogin(Request $request) {
         return response()->json(['message'=>'User is logged in','user'=>$request->user()]);
     }
